@@ -1,0 +1,117 @@
+import com.rameses.annotations.*;
+import com.rameses.util.*;
+
+class CloudSMSUploadImpl {	
+
+	@DataContext('account')
+	def account_db;
+
+	@DataContext('sms')
+	def sms;
+
+	@DataContext('sms_response')
+	def sms_response;
+
+	@DataContext('sms_forupload')
+	def sms_forupload;
+
+	@Service('api/globe/CloudSMSAPI') 
+	def smsapi;
+
+
+	@Async
+	@ProxyMethod(local=true)
+	public void upload( param ) {
+		if ( !param.objid ) return; 
+
+		def data = sms_forupload.findByObjid([ objid: param.objid ]); 
+		if ( !data ) return; 
+
+		def findby = [ objid: data.objid ]; 
+
+		boolean expired = data.expired.toString().matches('true|1'); 
+		if ( expired ) {
+			sms_forupload.find( findby ).delete(); 
+			sms_response.find( findby ).update([ 
+				state: 'EXPIRED', tracetime: data.dtexpired.toString() 
+			]); 
+			return; 
+		}
+
+
+		sms_forupload.find( findby ).delete(); 
+		sms_response.find( findby ).update([ state: 'SUCCESS' ]); 
+
+
+		def oldusedcredits = 0;
+		def newusedcredits = 0;
+
+		boolean pass = false;
+		def result = [:];
+		try { 
+			def acct = account_db.find([ name: data.acctname ]).first(); 
+			if ( !acct ) throw new Exception("INVALID_ACCOUNT"); 
+
+			oldusedcredits = (acct.usedcredits ? acct.usedcredits : 0); 
+			newusedcredits = (data.credit ? data.credit : 1) + oldusedcredits; 
+
+			result = postToAPI( data ); 
+			if ( result.status.toString().equalsIgnoreCase("SUCCESS") ) { 
+				result.tracetime = result.timestamp; 
+				result.tracemsg = 'MESSAGE_SENT'; 
+				pass = true; 
+
+				println '=== Message delivered to '+ data.phoneno;
+			} 
+			else { 
+				result.tracemsg = result.message; 
+			} 
+		} 
+		catch( Throwable e ) { 
+			def cause = ExceptionManager.getOriginal(e); 
+			def errmsg = (cause? cause.message: e.message); 
+			println "Failed to send sms to ${data.phoneno} caused by ${errmsg}"; 
+			result = [ tracemsg: errmsg ]; 
+		} 
+
+		if ( pass ) {
+			def uu = [ 
+				objid: findby.objid, 
+				traceid: result.traceid, tracemsg: result.tracemsg, 
+				tracetime: result.tracetime, traceinfo: result.traceinfo 
+			];
+			sms_response.success( uu ); 
+
+			account_db.find([ name: data.acctname.toString() ]).update([ usedcredits : newusedcredits]); 
+		}
+		else { 
+			def retrycount = ( data.retrycount ? data.retrycount : 0 ) + 1; 
+			def dtretry = com.rameses.util.DateUtil.add( data.dtretry, "10s" ); 
+
+			sms_forupload.create([ 
+				objid: findby.objid, dtexpiry: data.dtexpiry, 
+				dtretry: dtretry, retrycount: retrycount 
+			]); 
+
+			def uu = [ 
+				objid: findby.objid, state: 'PENDING', 
+				tracemsg: result.tracemsg, traceinfo: result.traceinfo 
+			]; 
+			sms_response.pending( uu ); 
+		}
+	}
+
+	def postToAPI( params ) {
+		try { 
+			return smsapi.send(params); 
+
+		} catch(java.net.ConnectException ce) {
+			println 'retry sending caused by '+ ce.class.name + ': '+ce.message;
+			return smsapi.send(params); 
+
+		} catch(java.net.SocketTimeoutException ste) {
+			println 'retry sending caused by '+ ste.class.name + ': '+ste.message;
+			return smsapi.send(params);  
+		} 
+	} 
+} 

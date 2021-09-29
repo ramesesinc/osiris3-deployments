@@ -1,0 +1,91 @@
+import com.rameses.annotations.*;
+import com.rameses.http.*;
+import com.rameses.util.*;
+
+class CloudSMSAPI
+{	
+	//static def SMS_HOST = 'http://mcpro2.sun-solutions.ph/mc';
+	static def SMS_HOST = 'mcpro1.sun-solutions.ph/mc';
+	static def USER = 'ENazareno';
+	static def PASS = 'C0ERHaet';
+	static def SENDER = 'ETRACS';
+	static def SESSION_CACHE_KEY = 'SUN_SMS_SESSIONID';
+	
+	@Cache
+	def cacheSvc;
+		
+	private def login() { 
+		def httpc = new HttpClient(SMS_HOST);
+		def acct = [user: USER, pass: PASS];
+		def result = httpc.post('login.aspx', acct);
+		
+		if ( !result || !result.startsWith('20100') ) 
+			throw new Exception("Login failed. Response: $result");
+		
+		return result.split(',')[2];
+	}
+	
+	@ProxyMethod 
+	public def getSession() {
+		def sessionid = cacheSvc.get(SESSION_CACHE_KEY);
+		if (sessionid == null) 
+		{
+			sessionid = login();
+			cacheSvc.put(SESSION_CACHE_KEY, sessionid, 60000);
+		} 
+		return sessionid;
+	} 
+
+	@ProxyMethod
+	public def send(Map params) { 
+		if (!params.phoneno) throw new Exception("'phoneno' parameter is required"); 
+		if (!params.message) throw new Exception("'message' parameter is required"); 
+
+		def smsdata = [
+			session: 	getSession(),
+			user: 		USER,
+			pass:  		PASS,
+			from:   	SENDER,
+			to: 		params.phoneno, 
+			msg: 		params.message
+		];
+
+		def httpc = new HttpClient(SMS_HOST); 
+		def result = httpc.post('send.aspx', smsdata); 
+		if (result.toString().startsWith("20300,")) {
+			def values = result.toString().split(",");
+			return [status:'SUCCESS', message:result, traceid:values[2], timestamp:values[3]];
+		} else {  
+			return [status:'FAILED', message:result]; 
+		} 
+	}	
+	
+	@ProxyMethod
+	public void logout(def sessionid) {
+		def httpc = new HttpClient(SMS_HOST);
+		def result = httpc.post('logout.aspx', [session: sessionid]);
+		println "sms logout: $result";
+	}
+
+	@ProxyMethod
+	public def inquire(Map param) {
+		def httpc = new HttpClient(SMS_HOST);
+		def p = [
+			user:    USER,
+			pass:    PASS,
+			session: getSession(),
+			dtefrom: param.dtfrom,
+			dteto:   param.dtto
+		];
+		
+		//this parameter is optional
+		if ( param.phoneno ) msisdn = param.phoneno
+		
+		def result = httpc.post('inboxinquiry.aspx', p);
+		
+		if ( !result || !result.startsWith('20340') )
+			throw new Exception("Unable to inquire. Response: $result");
+			
+		return result;
+	}
+}

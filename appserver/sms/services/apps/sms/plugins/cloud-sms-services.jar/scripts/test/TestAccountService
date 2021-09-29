@@ -1,0 +1,30 @@
+import com.rameses.annotations.*;
+
+class TestAccountService {
+
+	@DataContext('account')
+	def accountdb;	
+
+	@Env 
+	def env; 
+
+	@ProxyMethod(local=true) 
+	public def getAccount( params ) { 
+		def info = accountdb.find([ name: params.name ]).first(); 
+		if (!info) return null; 
+
+		if (!info.loadcredits) info.loadcredits = 0;
+		if (!info.usedcredits) info.usedcredits = 0;
+
+		info.acctname = info.name;
+		return info;
+	} 
+
+	@ProxyMethod
+	public def getEnv() { 
+		def map = [:]; 
+		map.env = env.toString(); 
+		map.account = getAccount([ name: env?.acctname ]); 
+		return map; 
+	}
+}

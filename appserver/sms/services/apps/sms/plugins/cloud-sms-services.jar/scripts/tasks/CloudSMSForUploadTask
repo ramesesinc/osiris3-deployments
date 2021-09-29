@@ -1,0 +1,49 @@
+import com.rameses.annotations.*;
+import com.rameses.util.*;
+
+class CloudSMSForUploadTask {	
+
+	@DataContext('sms_forupload')
+	def sms_forupload;
+
+	@DataContext('sms_response')
+	def sms_response;
+
+	@Service('api/CloudSMSUploadImpl') 
+	def uploadSvc;
+
+	@Service('DateService') 
+	def dateSvc; 
+
+
+	@Schedule(interval=1) 
+	public void upload( task ) { 
+		def inited = task.properties.inited; 
+		if ( !inited ) { 
+			println 'CloudSMSForUploadTask initializing...'; 
+			sms_forupload.where('lockid IS NOT NULL', [:]).update([ lockid: '{NULL}']); 
+			task.properties.inited = true; 
+			println 'CloudSMSForUploadTask initialized...'; 
+			return; 
+		}
+
+		def rundate = dateSvc.getServerDate();
+		def batchid = 'BATCH'+ new java.rmi.server.UID(); 
+		sms_forupload.createBatch([ rundate : rundate, batchid: batchid ]); 
+
+		def list = sms_forupload.getBatch([ batchid: batchid ]); 
+		if ( !list ) return; 
+
+		def findby = [:]; 
+		list.each{ 
+			findby.objid = it.objid; 
+			sms_response.find( findby ).update([ state: 'PENDING' ]); 
+		} 
+		findby.clear(); 
+
+		list.each{ 
+			uploadSvc.upload( it ); 
+		} 
+		list.clear(); 
+	} 
+}

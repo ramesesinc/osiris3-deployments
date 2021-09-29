@@ -1,0 +1,151 @@
+import com.rameses.annotations.*;
+import com.rameses.util.*;
+
+class CloudSMSService {	
+
+	@DataContext('account')
+	def accountdb;	
+
+	@DataContext('sms')
+	def sms;
+
+	@DataContext('sms_forupload')
+	def sms_forupload;
+
+	@DataContext('sms_response')
+	def sms_response;
+
+	@Service('DateService')
+	def dateSvc; 
+
+	@Env 
+	def env; 
+
+	@ProxyMethod(local=true) 
+	public def getAccount( params ) { 
+		def info = accountdb.find([ name: params.name ]).first(); 
+		if (!info) return null; 
+
+		if (!info.loadcredits) info.loadcredits = 0;
+		if (!info.usedcredits) info.usedcredits = 0;
+
+		info.acctname = info.name;
+		return info;
+	} 
+
+	@ProxyMethod(local=true)
+	public def checkAccount( params ) {
+		def info = getAccount( params );
+		if (!info) throw new Exception("INVALID_ACCOUNT"); 
+
+		if (!(info.apikey == params.apikey))   
+			throw new Exception("INVALID_API_KEY"); 
+		
+		if (!info.loadcredits) info.loadcredits = 0;
+		if (!info.usedcredits) info.usedcredits = 0;
+		
+		info.balance = info.loadcredits - info.usedcredits; 
+		if (info.balance < 0) throw new Exception("INSUFFICIENT_LOAD. Please reload your account."); 
+		
+		return info;
+	}
+
+
+	@ProxyMethod
+	public def create( params ) { 
+		def acctParam = [name: env.acctname, apikey: env.apikey];
+		checkAccount( acctParam ); 
+
+		if ( !params.message ) throw new Exception('message parameter is required'); 
+		if ( !params.phoneno ) throw new Exception('phoneno parameter is required'); 
+
+		if ( params.objid ) {
+			def data = sms.read([ objid: params.objid ]); 
+			if ( data ) return data; 
+		} 
+		else { 
+			params.objid = 'MSG'+ new java.rmi.server.UID(); 
+		} 
+
+		def newphoneno = resolvePhoneNo( params.phoneno ); 
+		if ( !newphoneno ) throw new Exception('Please provide a valid phone number'); 
+
+		params.phoneno = newphoneno; 
+
+		params.credit = calculateCredits( params.message ); 
+		params.dtfiled = dateSvc.getServerDate(); 
+		params.acctname = acctParam.name;
+		params.apikey = acctParam.apikey;
+		params.state = 'SUCCESS'; 
+		sms.create( params ); 
+
+        sms_forupload.create([ 
+			dtexpiry : DateUtil.add( params.dtfiled, '2m' ), 
+			dtretry  : params.dtfiled,  
+			objid : params.objid, 
+			retrycount : 0 
+		]); 
+		return params;  
+	} 
+
+	@ProxyMethod
+	public def saveMessage( params ) { 
+		if ( params.objid ) {
+			def o = sms_response.find([ objid: params.objid ]).first();
+			if ( o ) return o; 
+		} 
+
+		params.acctname = env.acctname;
+		params.apikey = env.apikey;
+		params.credit = calculateCredits( params.message ); 
+		params.dtfiled = dateSvc.getServerDate(); 
+		def data = sms.create( params ); 
+
+		def errmsg = null; 
+		try {
+			checkAccount( params ); 
+		} catch(Throwable t) { 
+			def cause = ExceptionManager.getOriginal( t ); 
+			errmsg = (cause? cause.message : t.message);
+			println '[CloudSMSService] '+ errmsg; 			
+		}
+
+		if ( errmsg ) {
+			sms_response.update([
+				objid : data.objid, 
+				state : 'FAILED', 
+				tracemsg : errmsg 
+			]); 
+		} else {
+			sms_forupload.create([ 
+				dtexpiry : DateUtil.add( data.dtfiled, '2m' ), 
+				dtretry  : data.dtfiled,  
+				objid    : data.objid, 
+				retrycount : 0 
+			]); 		
+		} 
+		return data; 
+	} 
+
+	int calculateCredits( msg ) { 
+		//calculate how much credits to be consumed from this message (max=160) 
+		int msgLen = msg.toString().length(); 
+		int usage = msgLen / 160; 
+		if ((msgLen % 160) > 0) usage += 1; 
+
+		return usage; 
+	} 
+
+	String resolvePhoneNo( value ) { 
+		if ( !value ) return null; 
+
+		def sb = new StringBuilder(); 
+		def chars = value.toString().toCharArray(); 
+        for (int i=0; i<chars.length; i++) {
+            if ( Character.isDigit( chars[i])) {
+                sb.append( chars[i]); 
+            }
+        }
+        return sb.toString(); 
+	} 
+} 

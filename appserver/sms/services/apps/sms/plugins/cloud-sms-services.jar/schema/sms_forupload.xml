@@ -1,0 +1,11 @@
+<schema adapter="sms">
+
+	<element tablename="sms_forupload">
+		<field name="objid" primary="true"/>
+		<field name="dtexpiry" required="true"/>
+		<field name="dtretry" required="true"/>
+		<field name="retrycount" />
+		<field name="lockid" />
+	</element>
+	
+</schema>
