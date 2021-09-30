@@ -17,7 +17,7 @@ services:
       - ../../_res/env.conf
       - ../../_custom/env.conf
     ports:
-      - "9170:8070"
+      - "9070:8070"
     volumes:
       - ./plugins:/enterprise/plugins
 
