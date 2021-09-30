@@ -1,0 +1,12 @@
+<schema adapter="main">
+
+	<element name="sms_response" tablename="sms">
+		<field name="objid" primary="true"/>
+		<field name="state" required="true"/>
+		<field name="tracemsg" required="true"/>
+		<field name="traceid"/>
+		<field name="tracetime"/>
+		<field name="traceinfo"/>
+	</element>
+	
+</schema>

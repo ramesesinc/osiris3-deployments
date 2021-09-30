@@ -1,0 +1,18 @@
+<schema adapter="main">
+
+	<element tablename="sms">
+		<field name="objid" primary="true"/>
+		<field name="state" required="true"/>
+		<field name="dtfiled" required="true"/>
+		<field name="acctname" required="true"/>
+		<field name="apikey" required="true"/>
+		<field name="credit" required="true"/>
+		<field name="phoneno" required="true"/>
+		<field name="message"/>
+		<field name="channel" />
+		<field name="keyword" />
+		<field name="txnid"/>
+		<field name="txnno"/>
+	</element>
+	
+</schema>

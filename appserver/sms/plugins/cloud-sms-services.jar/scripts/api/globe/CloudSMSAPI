@@ -1,0 +1,50 @@
+import com.rameses.annotations.*;
+import com.rameses.osiris3.server.JSON; 
+import com.rameses.http.BasicHttpClient;
+import com.rameses.util.Encoder;
+
+class CloudSMSAPI {
+
+	final static def APP_ID      = 'yMy4U9MoEjfebT9GXMiodgfKMMydUjBb'; 
+	final static def APP_SECRET  = '09ffa203d46bda24bb7850eaed25a18865c1bbb257ecd41f118067d35114772b'; 
+	final static def PASS_PHRASE = 'AtRCAwh9Cj';
+	final static def SHORT_CODE  = '21586930';
+
+	@ProxyMethod
+	public def send( Map params ) { 
+		if (!params.phoneno) throw new Exception("'phoneno' parameter is required"); 
+		if (!params.message) throw new Exception("'message' parameter is required"); 
+
+		def phoneno = params.phoneno.toString();
+		if ( phoneno.startsWith('0') && phoneno.length() >= 11 ) {
+			phoneno = phoneno.substring(1); 
+		}
+
+		def list = [
+			("clientCorrelator="+ params.objid), 
+			("message="+ params.message), 
+			("address="+ params.phoneno), 
+
+			("passphrase="+ PASS_PHRASE), 
+			("app_id="+ APP_ID), 
+			("app_secret="+ APP_SECRET)
+		];
+
+		def strdata = list.join('&'); 
+
+		def url = "https://devapi.globelabs.com.ph/smsmessaging/v1/outbound/"+ SHORT_CODE +"/requests/";
+
+		def httpc = new BasicHttpClient(); 
+		def result = httpc.post( url, strdata ); 
+
+		def respcode = result.responsecode.toString(); 
+
+		if ( respcode == '201' ) {
+			return [status: 'SUCCESS', traceinfo: result.data];
+		} 
+		else {  
+			def errmsg = respcode +' - '+ result.response; 
+			return [status: 'FAILED', traceinfo: result.error, message: errmsg]; 
+		} 
+	} 
+}

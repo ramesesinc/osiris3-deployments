@@ -3,7 +3,7 @@ version: "3"
 services:
   cloud-sms-server:
     container_name: cloud-sms-server
-    image: ramesesinc/osiris3-core:1.0
+    image: ramesesinc/osiris3-core:1.02
     restart: always
     logging:
       driver: "json-file"
@@ -19,7 +19,7 @@ services:
     ports:
       - "9170:8070"
     volumes:
-      - ./services:/apps/server/services
+      - ./plugins:/enterprise/plugins
 
-      - ../../_custom/datasources/smsds:/apps/server/services/datasources/mainds
+      - ../../_custom/datasources/smsds:/services/datasources/mainds
       - ../../_custom/output:/apps/server/output
