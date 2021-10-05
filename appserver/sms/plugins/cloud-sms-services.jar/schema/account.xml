@@ -2,12 +2,12 @@
 
 	<element tablename="account"> 
 		<field name="name" primary="true"/>
-		<field name="description"/>
-		<field name="channelname"/>
-		<field name="channeltype"/>
-		<field name="apikey"/>
-		<field name="loadcredits"/>
-		<field name="usedcredits"/>
+		<field name="description" required="true"/>
+		<field name="channelname" required="true"/>
+		<field name="channeltype" required="true"/>
+		<field name="apikey" required="true"/>
+		<field name="loadcredits" required="true"/>
+		<field name="usedcredits" required="true"/>
 		<field name="lockid"/>
 	</element>
 

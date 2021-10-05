@@ -1,0 +1,38 @@
+import com.rameses.annotations.*;
+import com.rameses.util.Encoder; 
+
+class SMSAccount {	
+
+	@DataContext('account')
+	def em_account;
+
+
+	@ProxyMethod
+	public def create( param ) {
+		if ( !param.name ) 
+			throw new Exception('param.name  parameter is required'); 
+		if ( !param.description ) 
+			throw new Exception('param.description  parameter is required'); 
+
+		if ( !param.channelname ) 
+			param.channelname = param.name; 
+
+		if ( !param.channeltype ) 
+			param.channeltype = 'topic';
+
+		if ( !param.apikey ) 
+			param.apikey = Encoder.MD5.encode( param.name, 'sms' );
+
+		if ( !param.loadcredits ) 
+			param.loadcredits = 10000;
+		
+		param.usedcredits = 0;
+
+		return em_account.create( param ); 
+	} 
+
+	@ProxyMethod
+	public def read( param ) { 
+		return em_account.find([ objid: param.objid.toString() ]).first(); 
+	} 
+}
